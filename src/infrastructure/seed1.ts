@@ -13,8 +13,8 @@ async function seed() {
         await EnergyGenerationRecord.deleteMany({});
 
         const records = [];
-        const startDate = new Date("2025-08-01T08:00:00Z");
-        const endDate = new Date("2025-11-23T08:00:00Z");
+        const startDate = new Date("2025-10-01T08:00:00Z");
+        const endDate = new Date("2025-12-17T08:00:00Z");
 
         let currentDate = new Date(startDate);
 

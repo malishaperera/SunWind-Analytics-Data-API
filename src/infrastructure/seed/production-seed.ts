@@ -3,7 +3,6 @@ import dotenv from "dotenv";
 import { connectDB } from "../db";
 
 dotenv.config();
-
 export const runSeed = async () => {
     try {
         await connectDB();
@@ -76,3 +75,4 @@ export const runSeed = async () => {
         console.error("Seed error:", error);
     }
 };
+runSeed();
