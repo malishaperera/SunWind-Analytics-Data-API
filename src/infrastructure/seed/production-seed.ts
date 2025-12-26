@@ -46,7 +46,7 @@ export const runSeed = async () => {
             const month = currentDate.getUTCMonth();
 
             for (const unit of solarUnits) {
-                let seasonalFactor = 1;
+                let seasonalFactor = 1;//normal weather
 
                 //Seasonal effect
                 if (month >= 5 && month <= 7) seasonalFactor = 1.2;
