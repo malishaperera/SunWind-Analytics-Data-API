@@ -14,7 +14,6 @@ type SolarProfile = {
 export const runSeed = async () => {
     try {
         await connectDB();
-
         console.log("Starting seed process...");
 
         // solar unit profiles
@@ -26,27 +25,35 @@ export const runSeed = async () => {
             { serialNumber: "SU-0005", capacity: 150, efficiency: 0.8, faultRate: 0.06 },
         ];
 
-        const cutoff = new Date(
-            Date.now() - 30 * 24 * 60 * 60 * 1000
-        );
+        //Find last generated ecord
+        const lastRecord = await EnergyGenerationRecord
+            .findOne()
+            .sort({ timestamp: -1 });
+        let startDate: Date;
 
-        await EnergyGenerationRecord.deleteMany({
-            timestamp: { $lt: cutoff },
-        });
-
-        console.log("Old records removed (older than 30 days)");
-
-        const records: any[] = [];
+        if (lastRecord){
+            startDate = new Date(
+                lastRecord.timestamp.getTime() + 2 * 60 * 60 * 1000
+            );
+            console.log("Continuing seed from:", startDate.toISOString());
+        }else {
+            startDate = new Date(
+                Date.now() - 30 * 24 * 60 * 60 * 1000
+            );
+            console.log("First seed, starting from:", startDate.toISOString());
+        }
 
         const now = new Date();
-        let currentDate = new Date(cutoff);
+        let currentDate = new Date(startDate);
+
+        const records: any[] = [];
 
         while (currentDate <= now) {
             const hour = currentDate.getUTCHours();
             const month = currentDate.getUTCMonth();
 
             for (const unit of solarUnits) {
-                let seasonalFactor = 1;//normal weather
+                let seasonalFactor = 1;
 
                 //Seasonal effect
                 if (month >= 5 && month <= 7) seasonalFactor = 1.2;
@@ -58,7 +65,7 @@ export const runSeed = async () => {
 
                 // Daytime generation
                 if (hour >= 6 && hour <= 18) {
-                    let sunPeak = hour >= 10 && hour <= 14 ? 1.5 : 1.1;
+                    const sunPeak = hour >= 10 && hour <= 14 ? 1.5 : 1.1;
 
                     energyGenerated = Math.round(
                         unit.capacity *
@@ -75,7 +82,7 @@ export const runSeed = async () => {
                 }
 
                 // NIGHT GENERATION anomaly
-                if ((hour < 6 || hour > 18) && Math.random() < 0.04) {
+                if ((hour < 6 || hour > 18) && Math.random() < 0.02) {
                     energyGenerated = Math.round(80 + Math.random() * 80);
                 }
 
@@ -98,14 +105,16 @@ export const runSeed = async () => {
             );
         }
 
-        await EnergyGenerationRecord.insertMany(records);
+        if (records.length > 0) {
+            await EnergyGenerationRecord.insertMany(records);
+            console.log(`Inserted ${records.length} new records`);
+        } else {
+            console.log("No new records to insert");
+        }
 
-        console.log(`Seed completed successfully`);
-        console.log(`Inserted records: ${records.length}`);
-
+        console.log("Incremental seed completed successfully");
     } catch (error) {
         console.error("Seed error:", error);
     }
 };
-
 runSeed();

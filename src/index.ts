@@ -9,13 +9,10 @@ import {initializeSeedScheduler} from "./infrastructure/seed/seed-scheduler";
 
 const server = express();
 server.use(cors({ origin: "http://localhost:5173" }));
-
 server.use(loggerMiddleware);
-
 server.use(express.json());
 
 server.use("/api/energy-generation-records", energyGenerationRecordRouter);
-
 server.use(globalErrorHandler);
 
 connectDB();

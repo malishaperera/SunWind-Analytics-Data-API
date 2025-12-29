@@ -2,7 +2,7 @@ import cron from "node-cron";
 import { runSeed } from "./production-seed";
 
 export const initializeSeedScheduler = () => {
-    // 🌙 Every day at 12:00 AM (midnight)
+    // Every day at 12:00 AM (midnight)
     const schedule = process.env.SYNC_CRON_SCHEDULE || '0 0 * * *';
 
     cron.schedule(schedule, async () => {
@@ -14,6 +14,5 @@ export const initializeSeedScheduler = () => {
             console.error("[SEED] Daily seed failed", error);
         }
     });
-
     console.log(`[SEED] Scheduler initialized (${schedule})`);
 };
