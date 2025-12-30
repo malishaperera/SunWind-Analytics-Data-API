@@ -6,37 +6,38 @@ dotenv.config();
 
 type SolarProfile = {
     serialNumber: string;
-    capacity: number;      // base panel size
-    efficiency: number;    // performance factor
-    faultRate: number;     // probability of failure
+    capacity: number;
+    efficiency: number;
 };
+
+type DayAnomalyType = "NONE" | "SPIKE" | "ZERO" | "NIGHT";
 
 export const runSeed = async () => {
     try {
         await connectDB();
-        console.log("Starting seed process...");
+        console.log("Starting realistic incremental seed...");
 
-        // solar unit profiles
         const solarUnits: SolarProfile[] = [
-            { serialNumber: "SU-0001", capacity: 220, efficiency: 1.1, faultRate: 0.02 },
-            { serialNumber: "SU-0002", capacity: 180, efficiency: 0.9, faultRate: 0.05 },
-            { serialNumber: "SU-0003", capacity: 300, efficiency: 1.3, faultRate: 0.01 },
-            { serialNumber: "SU-0004", capacity: 250, efficiency: 1.0, faultRate: 0.03 },
-            { serialNumber: "SU-0005", capacity: 150, efficiency: 0.8, faultRate: 0.06 },
+            { serialNumber: "SU-0001", capacity: 220, efficiency: 1.1 },
+            { serialNumber: "SU-0002", capacity: 180, efficiency: 0.9 },
+            { serialNumber: "SU-0003", capacity: 300, efficiency: 1.3 },
+            { serialNumber: "SU-0004", capacity: 250, efficiency: 1.0 },
+            { serialNumber: "SU-0005", capacity: 150, efficiency: 0.8 },
         ];
 
-        //Find last generated ecord
+        // Find last generated record
         const lastRecord = await EnergyGenerationRecord
             .findOne()
             .sort({ timestamp: -1 });
+
         let startDate: Date;
 
-        if (lastRecord){
+        if (lastRecord) {
             startDate = new Date(
                 lastRecord.timestamp.getTime() + 2 * 60 * 60 * 1000
             );
             console.log("Continuing seed from:", startDate.toISOString());
-        }else {
+        } else {
             startDate = new Date(
                 Date.now() - 30 * 24 * 60 * 60 * 1000
             );
@@ -45,12 +46,31 @@ export const runSeed = async () => {
 
         const now = new Date();
         let currentDate = new Date(startDate);
-
         const records: any[] = [];
 
+        let currentDayKey = "";
+        let dayAnomalyType: DayAnomalyType = "NONE";
+
         while (currentDate <= now) {
+            const dayKey = currentDate.toISOString().slice(0, 10);
             const hour = currentDate.getUTCHours();
             const month = currentDate.getUTCMonth();
+
+            // 🔁 New day → decide anomaly ONCE per day
+            if (dayKey !== currentDayKey) {
+                currentDayKey = dayKey;
+
+                const isAnomalyDay = Math.random() < 0.25; // 25% days only
+
+                if (!isAnomalyDay) {
+                    dayAnomalyType = "NONE";
+                } else {
+                    const r = Math.random();
+                    if (r < 0.45) dayAnomalyType = "SPIKE";
+                    else if (r < 0.75) dayAnomalyType = "ZERO";
+                    else dayAnomalyType = "NIGHT";
+                }
+            }
 
             for (const unit of solarUnits) {
                 let seasonalFactor = 1;
@@ -63,7 +83,7 @@ export const runSeed = async () => {
 
                 let energyGenerated = 0;
 
-                // Daytime generation
+                // Normal daytime generation
                 if (hour >= 6 && hour <= 18) {
                     const sunPeak = hour >= 10 && hour <= 14 ? 1.5 : 1.1;
 
@@ -72,23 +92,24 @@ export const runSeed = async () => {
                         unit.efficiency *
                         seasonalFactor *
                         sunPeak *
-                        (0.7 + Math.random() * 0.6)
+                        (0.75 + Math.random() * 0.4)
                     );
                 }
 
-                // ZERO OUTPUT anomaly
-                if (Math.random() < unit.faultRate && hour >= 10 && hour <= 14) {
+                // Apply anomaly ONLY if today is anomaly day
+                if (dayAnomalyType === "ZERO" && hour >= 10 && hour <= 14) {
                     energyGenerated = 0;
                 }
 
-                // NIGHT GENERATION anomaly
-                if ((hour < 6 || hour > 18) && Math.random() < 0.02) {
-                    energyGenerated = Math.round(80 + Math.random() * 80);
+                if (dayAnomalyType === "SPIKE" && hour >= 9 && hour <= 15) {
+                    energyGenerated = Math.round(energyGenerated * 2.2);
                 }
 
-                // SPIKE anomaly
-                if (Math.random() < 0.015) {
-                    energyGenerated = Math.round(energyGenerated * 2.5);
+                if (
+                    dayAnomalyType === "NIGHT" &&
+                    (hour < 6 || hour > 18)
+                ) {
+                    energyGenerated = Math.round(50 + Math.random() * 70);
                 }
 
                 records.push({
@@ -99,7 +120,7 @@ export const runSeed = async () => {
                 });
             }
 
-            // Move forward by 2 hours
+            //Move forward by 2 hours
             currentDate = new Date(
                 currentDate.getTime() + 2 * 60 * 60 * 1000
             );
@@ -107,14 +128,15 @@ export const runSeed = async () => {
 
         if (records.length > 0) {
             await EnergyGenerationRecord.insertMany(records);
-            console.log(`Inserted ${records.length} new records`);
+            console.log(`Inserted ${records.length} records`);
         } else {
             console.log("No new records to insert");
         }
 
-        console.log("Incremental seed completed successfully");
+        console.log("Realistic incremental seed completed successfully");
     } catch (error) {
         console.error("Seed error:", error);
     }
 };
+
 runSeed();
