@@ -50,25 +50,32 @@ export const runSeed = async () => {
 
         let currentDayKey = "";
         let dayAnomalyType: DayAnomalyType = "NONE";
+        let anomalyUnit: string | null = null;
 
         while (currentDate <= now) {
             const dayKey = currentDate.toISOString().slice(0, 10);
             const hour = currentDate.getUTCHours();
             const month = currentDate.getUTCMonth();
 
-            // 🔁 New day → decide anomaly ONCE per day
+            // New day → decide anomaly ONCE per day
             if (dayKey !== currentDayKey) {
                 currentDayKey = dayKey;
 
-                const isAnomalyDay = Math.random() < 0.25; // 25% days only
+                const isAnomalyDay = Math.random() < 0.06; // 7%
 
                 if (!isAnomalyDay) {
                     dayAnomalyType = "NONE";
+                    anomalyUnit = null;
                 } else {
                     const r = Math.random();
-                    if (r < 0.45) dayAnomalyType = "SPIKE";
-                    else if (r < 0.75) dayAnomalyType = "ZERO";
-                    else dayAnomalyType = "NIGHT";
+                    if (r < 0.6) dayAnomalyType = "SPIKE";      // 60%
+                    else if (r < 0.9) dayAnomalyType = "NIGHT"; // 25%
+                    else dayAnomalyType = "ZERO";// 15%
+
+                    // Apply anomaly to ONE unit only
+                    anomalyUnit =
+                        solarUnits[Math.floor(Math.random() * solarUnits.length)]
+                            .serialNumber;
                 }
             }
 
@@ -97,19 +104,21 @@ export const runSeed = async () => {
                 }
 
                 // Apply anomaly ONLY if today is anomaly day
-                if (dayAnomalyType === "ZERO" && hour >= 10 && hour <= 14) {
-                    energyGenerated = 0;
-                }
+                if (unit.serialNumber === anomalyUnit) {
+                    if (dayAnomalyType === "ZERO" && hour >= 11 && hour <= 12) {
+                        energyGenerated = 0;
+                    }
 
-                if (dayAnomalyType === "SPIKE" && hour >= 9 && hour <= 15) {
-                    energyGenerated = Math.round(energyGenerated * 2.2);
-                }
+                    if (dayAnomalyType === "SPIKE" && hour >= 10 && hour <= 14) {
+                        energyGenerated = Math.round(energyGenerated * 2);
+                    }
 
-                if (
-                    dayAnomalyType === "NIGHT" &&
-                    (hour < 6 || hour > 18)
-                ) {
-                    energyGenerated = Math.round(50 + Math.random() * 70);
+                    if (
+                        dayAnomalyType === "NIGHT" &&
+                        (hour < 6 || hour > 18)
+                    ) {
+                        energyGenerated = Math.round(40 + Math.random() * 60);
+                    }
                 }
 
                 records.push({
