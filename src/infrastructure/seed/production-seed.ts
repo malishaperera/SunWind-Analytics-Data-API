@@ -1,151 +1,91 @@
-import { EnergyGenerationRecord } from "../entities/EnergyGenerationRecord";
+import mongoose from "mongoose";
 import dotenv from "dotenv";
-import { connectDB } from "../db";
+import {EnergyGenerationRecord} from "../entities/EnergyGenerationRecord";
+import {connectDB} from "../db";
 
 dotenv.config();
 
-type SolarProfile = {
-    serialNumber: string;
-    capacity: number;
-    efficiency: number;
-};
+const solarUnits = [
+    { serialNumber: "SU-001", capacity: 5.0},
+    { serialNumber: "SU-002", capacity: 3.5},
+    { serialNumber: "SU-003", capacity: 10.0},
+    { serialNumber: "SU-004", capacity: 4.2},
+    { serialNumber: "SU-005", capacity: 6.0},
+];
 
-type DayAnomalyType = "NONE" | "SPIKE" | "ZERO" | "NIGHT";
+const TOTAL_DAYS = 30;
+const SUNRISE = 6;
+const SUNSET = 18;
 
-export const runSeed = async () => {
-    try {
-        await connectDB();
-        console.log("Starting realistic incremental seed...");
+function getSolarEnergyGenerated(hour: number, month: number, capacity: number): number {
+    if (hour < 6 || hour > 18) return 0;
 
-        const solarUnits: SolarProfile[] = [
-            { serialNumber: "SU-0001", capacity: 220, efficiency: 1.1 },
-            { serialNumber: "SU-0002", capacity: 180, efficiency: 0.9 },
-            { serialNumber: "SU-0003", capacity: 300, efficiency: 1.3 },
-            { serialNumber: "SU-0004", capacity: 250, efficiency: 1.0 },
-            { serialNumber: "SU-0005", capacity: 150, efficiency: 0.8 },
-        ];
+    let seasonalCapacity = capacity;
+    if (month >= 4 && month <= 7) {
+        seasonalCapacity = capacity * 1.2; // 20% more power in Summer
+    }
 
-        // Find last generated record
-        const lastRecord = await EnergyGenerationRecord
-            .findOne()
-            .sort({ timestamp: -1 });
+    const radians = ((hour - SUNRISE) / (SUNSET - SUNRISE)) * Math.PI;
+    const intensity = Math.sin(radians);
 
-        let startDate: Date;
+    return seasonalCapacity * intensity;
+}
 
-        if (lastRecord) {
-            startDate = new Date(
-                lastRecord.timestamp.getTime() + 2 * 60 * 60 * 1000
-            );
-            console.log("Continuing seed from:", startDate.toISOString());
-        } else {
-            startDate = new Date(
-                Date.now() - 30 * 24 * 60 * 60 * 1000
-            );
-            console.log("First seed, starting from:", startDate.toISOString());
-        }
+export const seed = async () => {
 
-        const now = new Date();
-        let currentDate = new Date(startDate);
-        const records: any[] = [];
+    try{
+        // await connectDB();
+        console.log("Connected to database. Starting seeding process...");
+        await EnergyGenerationRecord.deleteMany({});
+        console.log("Database cleared. Starting fresh...");
 
-        let currentDayKey = "";
-        let dayAnomalyType: DayAnomalyType = "NONE";
-        let anomalyUnit: string | null = null;
+        for (const unit of solarUnits) {
 
-        while (currentDate <= now) {
-            const dayKey = currentDate.toISOString().slice(0, 10);
-            const hour = currentDate.getUTCHours();
-            const month = currentDate.getUTCMonth();
+            const records = [];
+            let currentDate = new Date();
+            currentDate.setDate(currentDate.getDate() - TOTAL_DAYS);
+            currentDate.setHours(0, 0, 0, 0);
+            const endDate = new Date()
 
-            // New day → decide anomaly ONCE per day
-            if (dayKey !== currentDayKey) {
-                currentDayKey = dayKey;
+            while(currentDate <= endDate) {
 
-                const isAnomalyDay = Math.random() < 0.06; // 7%
+                const hour = currentDate.getHours();
+                const month = currentDate.getMonth();
 
-                if (!isAnomalyDay) {
-                    dayAnomalyType = "NONE";
-                    anomalyUnit = null;
-                } else {
-                    const r = Math.random();
-                    if (r < 0.6) dayAnomalyType = "SPIKE";      // 60%
-                    else if (r < 0.9) dayAnomalyType = "NIGHT"; // 25%
-                    else dayAnomalyType = "ZERO";// 15%
+                // Calculate normal energy
+                let energy = getSolarEnergyGenerated(hour, month, unit.capacity);
 
-                    // Apply anomaly to ONE unit only
-                    anomalyUnit =
-                        solarUnits[Math.floor(Math.random() * solarUnits.length)]
-                            .serialNumber;
-                }
-            }
+                const dice = Math.random();
 
-            for (const unit of solarUnits) {
-                let seasonalFactor = 1;
-
-                //Seasonal effect
-                if (month >= 5 && month <= 7) seasonalFactor = 1.2;
-                else if (month >= 2 && month <= 4) seasonalFactor = 1.1;
-                else if (month >= 8 && month <= 10) seasonalFactor = 1.0;
-                else seasonalFactor = 0.85;
-
-                let energyGenerated = 0;
-
-                // Normal daytime generation
-                if (hour >= 6 && hour <= 18) {
-                    const sunPeak = hour >= 10 && hour <= 14 ? 1.5 : 1.1;
-
-                    energyGenerated = Math.round(
-                        unit.capacity *
-                        unit.efficiency *
-                        seasonalFactor *
-                        sunPeak *
-                        (0.75 + Math.random() * 0.4)
-                    );
-                }
-
-                // Apply anomaly ONLY if today is anomaly day
-                if (unit.serialNumber === anomalyUnit) {
-                    if (dayAnomalyType === "ZERO" && hour >= 11 && hour <= 12) {
-                        energyGenerated = 0;
-                    }
-
-                    if (dayAnomalyType === "SPIKE" && hour >= 10 && hour <= 14) {
-                        energyGenerated = Math.round(energyGenerated * 2);
-                    }
-
-                    if (
-                        dayAnomalyType === "NIGHT" &&
-                        (hour < 6 || hour > 18)
-                    ) {
-                        energyGenerated = Math.round(40 + Math.random() * 60);
+                if (hour >= SUNRISE && hour <= SUNSET) {
+                    if (dice < 0.01) {
+                        energy = 0; // 1% Failure
+                    } else if (dice < 0.02) {
+                        energy = unit.capacity * 10; // 1% Spike
+                    } else if (dice < 0.03) {
+                        energy = energy * 0.2; // 1% Cloudy day - 80% drop
+                    }else if (dice < 0.04) {
+                        energy = unit.capacity * 0.5; // 4. "Clipping" - Locked at 50% power
                     }
                 }
 
                 records.push({
                     serialNumber: unit.serialNumber,
+                    energyGenerated: Number(energy.toFixed(2)),
                     timestamp: new Date(currentDate),
-                    energyGenerated,
-                    intervalHours: 2,
+                    intervalHours: 1,
                 });
+                currentDate.setHours(currentDate.getHours() + 1);
             }
-
-            //Move forward by 2 hours
-            currentDate = new Date(
-                currentDate.getTime() + 2 * 60 * 60 * 1000
-            );
-        }
-
-        if (records.length > 0) {
             await EnergyGenerationRecord.insertMany(records);
-            console.log(`Inserted ${records.length} records`);
-        } else {
-            console.log("No new records to insert");
         }
+        console.log("Seeding completed successfully!");
 
-        console.log("Realistic incremental seed completed successfully");
-    } catch (error) {
-        console.error("Seed error:", error);
+    }catch (err){
+        console.error("Error seeding data:", err);
+    }finally {
+        await mongoose.disconnect();
     }
-};
+}
 
-runSeed();
+seed();
