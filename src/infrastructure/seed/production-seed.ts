@@ -1,16 +1,15 @@
 import mongoose from "mongoose";
 import dotenv from "dotenv";
 import {EnergyGenerationRecord} from "../entities/EnergyGenerationRecord";
-import {connectDB} from "../db";
-
+import { connectDB } from "../db";
 dotenv.config();
 
 const solarUnits = [
-    { serialNumber: "SU-001", capacity: 5.0},
-    { serialNumber: "SU-002", capacity: 3.5},
-    { serialNumber: "SU-003", capacity: 10.0},
-    { serialNumber: "SU-004", capacity: 4.2},
-    { serialNumber: "SU-005", capacity: 6.0},
+    { serialNumber: "SU-0001", capacity: 5.0},
+    { serialNumber: "SU-0002", capacity: 3.5},
+    { serialNumber: "SU-0003", capacity: 10.0},
+    { serialNumber: "SU-0004", capacity: 4.2},
+    { serialNumber: "SU-0005", capacity: 6.0},
 ];
 
 const TOTAL_DAYS = 30;
