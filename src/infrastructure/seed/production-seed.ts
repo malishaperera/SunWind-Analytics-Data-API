@@ -1,7 +1,8 @@
 import mongoose from "mongoose";
 import dotenv from "dotenv";
 import {EnergyGenerationRecord} from "../entities/EnergyGenerationRecord";
-import { connectDB } from "../db";
+import {connectDB} from "../db";
+
 dotenv.config();
 
 const solarUnits = [
@@ -17,10 +18,10 @@ const SUNRISE = 6;
 const SUNSET = 18;
 
 function getSolarEnergyGenerated(hour: number, month: number, capacity: number): number {
-    if (hour < 6 || hour > 18) return 0;
+    if (hour < SUNRISE || hour > SUNSET) return 0;
 
     let seasonalCapacity = capacity;
-    if (month >= 4 && month <= 7) {
+    if (month >= 3 && month <= 6) {
         seasonalCapacity = capacity * 1.2; // 20% more power in Summer
     }
 
@@ -33,7 +34,7 @@ function getSolarEnergyGenerated(hour: number, month: number, capacity: number):
 export const seed = async () => {
 
     try{
-        // await connectDB();
+        // connectDB();
         console.log("Connected to database. Starting seeding process...");
         await EnergyGenerationRecord.deleteMany({});
         console.log("Database cleared. Starting fresh...");
@@ -54,17 +55,17 @@ export const seed = async () => {
                 // Calculate normal energy
                 let energy = getSolarEnergyGenerated(hour, month, unit.capacity);
 
-                const dice = Math.random();
+                const anomalyRoll  = Math.random();
 
                 if (hour >= SUNRISE && hour <= SUNSET) {
-                    if (dice < 0.01) {
+                    if (anomalyRoll  < 0.01) {
                         energy = 0; // 1% Failure
-                    } else if (dice < 0.02) {
+                    } else if (anomalyRoll  < 0.02) {
                         energy = unit.capacity * 10; // 1% Spike
-                    } else if (dice < 0.03) {
+                    } else if (anomalyRoll  < 0.03) {
                         energy = energy * 0.2; // 1% Cloudy day - 80% drop
-                    }else if (dice < 0.04) {
-                        energy = unit.capacity * 0.5; // 4. "Clipping" - Locked at 50% power
+                    }else if (anomalyRoll  < 0.04) {
+                        energy = unit.capacity * 0.5; //  "Clipping" - Locked at 50% power
                     }
                 }
 
@@ -82,8 +83,6 @@ export const seed = async () => {
 
     }catch (err){
         console.error("Error seeding data:", err);
-    }finally {
-        await mongoose.disconnect();
     }
 }
 
